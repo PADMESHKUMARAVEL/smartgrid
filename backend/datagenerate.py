@@ -75,6 +75,14 @@ class GridDataGenerator:
         
         # Update edge data
         for u, v in self.grid.edges:
+            # Initialize edge attributes if not present
+            if "age" not in self.grid[u][v]:
+                self.grid[u][v]["age"] = random.uniform(1, 20)
+            if "corrosion" not in self.grid[u][v]:
+                self.grid[u][v]["corrosion"] = random.uniform(0.0, 0.3)
+            if "vibration" not in self.grid[u][v]:
+                self.grid[u][v]["vibration"] = random.uniform(0.1, 0.4)
+            
             # Base resistance
             resistance = random.uniform(0.001, 0.005)
             self.grid[u][v]["resistance"] = resistance
@@ -87,6 +95,21 @@ class GridDataGenerator:
             # Temperature rises with current
             temperature = 25 + (current / 400) * 40 + random.uniform(-2, 2)
             self.grid[u][v]["temperature"] = round(temperature, 2)
+            
+            # Vibration increases with current and temperature
+            vibration = 0.1 + (current / 400) * 0.3 + (temperature - 25) / 40 * 0.2 + random.uniform(-0.05, 0.05)
+            self.grid[u][v]["vibration"] = round(max(0.1, vibration), 3)
+            
+            # Corrosion increases slightly with temperature and age
+            corrosion_increase = (temperature - 25) * 0.001 + self.grid[u][v]["age"] * 0.0001
+            self.grid[u][v]["corrosion"] = round(min(1.0, self.grid[u][v]["corrosion"] + corrosion_increase), 3)
+            
+            # Age increases very slowly each iteration
+            self.grid[u][v]["age"] += 0.00005
+            
+            # Harmonic distortion (varies with load)
+            harmonic = 2.0 + (current / 400) * 2.0 + random.uniform(-0.5, 0.5)
+            self.grid[u][v]["harmonic"] = round(max(1, harmonic), 2)
             
             # Risk derived from overload + temperature
             overload_factor = current / 500
@@ -128,7 +151,11 @@ class GridDataGenerator:
                 'current': edge_data.get('current', 0),
                 'temperature': edge_data.get('temperature', 0),
                 'power_flow': edge_data.get('power_flow', 0),
-                'risk': edge_data.get('risk', 0)
+                'risk': edge_data.get('risk', 0),
+                'vibration': edge_data.get('vibration', 0),
+                'age': round(edge_data.get('age', 0), 2),
+                'corrosion': edge_data.get('corrosion', 0),
+                'harmonic': edge_data.get('harmonic', 0)
             })
         
         # Calculate metrics
@@ -173,6 +200,10 @@ class GridDataGenerator:
             print(f"  Resistance: {round(edge_data['resistance'], 5)} Ω")
             print(f"  Current: {round(edge_data['current'], 2)} A")
             print(f"  Temperature: {round(edge_data['temperature'], 2)} °C")
+            print(f"  Vibration: {round(edge_data.get('vibration', 0), 3)} mm/s")
+            print(f"  Age: {round(edge_data.get('age', 0), 1)} years")
+            print(f"  Corrosion: {round(edge_data.get('corrosion', 0), 3)} (level)")
+            print(f"  Harmonic Distortion: {round(edge_data.get('harmonic', 0), 2)}%")
             print(f"  Power Flow: {round(edge_data['power_flow'], 2)} MW")
             print(f"  Risk Score: {round(edge_data['risk'], 3)}\n")
         

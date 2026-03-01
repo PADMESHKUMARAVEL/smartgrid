@@ -7,343 +7,13 @@ import networkx as nx
 import matplotlib.pyplot as plt
 import numpy as np
 import random
+import time
+from predictive_maintenance import PredictiveMaintenanceModel
+
 
 # ===============================
-# 1️⃣ COMPLETE SYSTEM
+# POLICY NETWORK FOR RL
 # ===============================
-
-class SmartGridOptimizer:
-    """
-    Integrates:
-    - Predictive Maintenance (asset risks)
-    - Reinforcement Learning (policy optimization)
-    - Path Optimization (risk-weighted routing)
-    """
-    
-    def __init__(self, num_nodes=8, num_generators=2):
-        self.num_nodes = num_nodes
-        self.generators = list(range(num_generators))
-        self.loads = list(range(num_generators, num_nodes))
-        
-        # Create grid
-        self.create_grid()
-        self.setup_named_nodes()
-        
-        # Policy network (Deep RL)
-        self.policy = PolicyNetwork(input_dim=7, output_dim=len(self.generators))
-        self.optimizer = optim.Adam(self.policy.parameters(), lr=0.01)
-        
-        # Maintenance model (your XGBoost from earlier)
-        self.maintenance_model = self.load_maintenance_model()
-        
-        # Training logs
-        self.loss_history = []
-        self.risk_history = []
-        self.optimized_paths = []  # Store current optimized paths
-        
-    def setup_named_nodes(self):
-        """Setup named generators and substations"""
-        # Named generators
-        self.generator_names = {
-            0: "North Power Plant",
-            1: "South Thermal Station"
-        }
-        
-        # Named substations with constant demands (MW)
-        self.substation_names = {
-            2: {"name": "Downtown Substation", "demand": 45},
-            3: {"name": "Uptown Substation", "demand": 52},
-            4: {"name": "Industrial Zone Station", "demand": 75},
-            5: {"name": "Residential Hub", "demand": 38},
-            6: {"name": "Shopping Complex Node", "demand": 41},
-            7: {"name": "University Campus Hub", "demand": 48}
-        }
-        
-        # Set node properties
-        for node_id in self.generators:
-            self.G.nodes[node_id]["name"] = self.generator_names[node_id]
-            self.G.nodes[node_id]["type"] = "generator"
-            
-        for node_id in self.loads:
-            self.G.nodes[node_id]["name"] = self.substation_names[node_id]["name"]
-            self.G.nodes[node_id]["type"] = "substation"
-            self.G.nodes[node_id]["constant_demand"] = self.substation_names[node_id]["demand"]
-        
-    def create_grid(self):
-        """Create connected grid"""
-        self.G = nx.erdos_renyi_graph(self.num_nodes, 0.5)
-        while not nx.is_connected(self.G):
-            self.G = nx.erdos_renyi_graph(self.num_nodes, 0.5)
-        
-        # Set node types
-        for n in self.G.nodes:
-            if n in self.generators:
-                self.G.nodes[n]["type"] = "generator"
-            else:
-                self.G.nodes[n]["type"] = "load"
-    
-    def load_maintenance_model(self):
-        """Placeholder for your XGBoost/Isolation Forest model"""
-        # In real code, load your trained model here
-        return {"model": "predictive_maintenance_model"}
-    
-    def update_grid_state(self, scada_data):
-        """Update grid with real data + maintenance predictions"""
-        
-        # 1. Update demands from SCADA (constant for each substation)
-        for load in self.loads:
-            # Use constant demand from substation definition
-            if load in self.substation_names:
-                self.G.nodes[load]["demand"] = self.substation_names[load]["demand"]
-            else:
-                self.G.nodes[load]["demand"] = random.randint(20, 60)
-        
-        # Update generator capacities
-        for gen in self.generators:
-            self.G.nodes[gen]["demand"] = 0  # Generators don't have demand
-        
-        # 2. Update resistances (thermal effects)
-        for u, v in self.G.edges:
-            base_resistance = 0.002
-            temp_factor = 1 + 0.0039 * random.uniform(20, 50)  # Temperature effect
-            self.G[u][v]["resistance"] = base_resistance * temp_factor
-        
-        # 3. CRITICAL: Get risks from maintenance model
-        for u, v in self.G.edges:
-            # Simulate maintenance model prediction
-            # In real code: risk = self.maintenance_model.predict(line_id)
-            self.G[u][v]["risk"] = self.calculate_risk_from_features(u, v)
-    
-    def calculate_risk_from_features(self, u, v):
-        """
-        Simulate your predictive maintenance model
-        In real system: call your trained XGBoost model
-        """
-        # Features that would come from monitoring
-        features = {
-            'load': np.mean([self.G.nodes[u].get('demand', 50), 
-                            self.G.nodes[v].get('demand', 50)]),
-            'temp': random.uniform(40, 90),
-            'age': random.uniform(0, 20),
-            'vibration': random.uniform(0, 1),
-            'corrosion': random.uniform(0, 0.5)
-        }
-        
-        # Simple risk model (replace with actual ML model)
-        risk = (
-            0.3 * (features['load'] / 100) +
-            0.4 * (features['temp'] / 100) +
-            0.2 * (features['age'] / 20) +
-            0.1 * features['vibration']
-        )
-        
-        return min(risk, 0.95)  # Cap at 0.95
-    
-    def create_state_tensor(self, node):
-        """Rich state representation for RL"""
-        
-        demand = self.G.nodes[node]["demand"]
-        degree = self.G.degree[node]
-        
-        # Risk features
-        neighbor_risks = [self.G[node][nbr]["risk"] for nbr in self.G.neighbors(node)]
-        avg_risk = np.mean(neighbor_risks) if neighbor_risks else 0
-        max_risk = np.max(neighbor_risks) if neighbor_risks else 0
-        
-        # Path features to each generator
-        path_resistances = []
-        path_risks = []
-        
-        for gen in self.generators:
-            try:
-                # Find best path considering both resistance AND risk
-                path = self.find_optimal_path(node, gen)
-                path_resistance = sum(self.G[u][v]["resistance"] for u,v in zip(path,path[1:]))
-                path_risk = sum(self.G[u][v]["risk"] for u,v in zip(path,path[1:]))
-                path_resistances.append(path_resistance)
-                path_risks.append(path_risk)
-            except:
-                path_resistances.append(999)
-                path_risks.append(999)
-        
-        # Normalized state vector
-        state = torch.tensor([
-            demand / 100,  # Normalize demand
-            avg_risk,      # Average neighbor risk
-            max_risk,      # Maximum neighbor risk
-            degree / 10,   # Normalize degree
-            min(path_resistances) / 10,  # Best path resistance
-            min(path_risks),              # Best path risk
-            np.mean(path_resistances) / 10  # Average path resistance
-        ], dtype=torch.float32)
-        
-        return state
-    
-    def find_optimal_path(self, source, target, risk_weight=10.0):
-        """
-        Find path minimizing: resistance + risk_weight * risk
-        This balances loss minimization with asset protection
-        """
-        H = self.G.copy()
-        
-        for u, v in H.edges:
-            # Combined cost: loss (resistance) + risk penalty
-            H[u][v]['weight'] = (
-                H[u][v]['resistance'] + 
-                risk_weight * H[u][v]['risk']
-            )
-        
-        return nx.shortest_path(H, source, target, weight='weight')
-    
-    def compute_path_loss(self, path):
-        """Calculate actual I²R loss for a path"""
-        return sum(self.G[u][v]["resistance"] for u,v in zip(path,path[1:]))
-    
-    def train_episode(self):
-        """Single training episode using REINFORCE"""
-        
-        # Update grid with new state
-        self.update_grid_state(scada_data=None)  # In real: pass SCADA data
-        
-        log_probs = []
-        rewards = []
-        paths = []
-        
-        total_loss = 0
-        total_demand = 0
-        
-        # For each load, decide which generator to use AND calculate optimized path
-        for load in self.loads:
-            demand = self.G.nodes[load]["demand"]
-            total_demand += demand
-            
-            # Get state
-            state = self.create_state_tensor(load)
-            
-            # Policy forward pass
-            logits = self.policy(state)
-            probs = F.softmax(logits, dim=0)
-            dist = Categorical(probs)
-            
-            # Sample action
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
-            log_probs.append(log_prob)
-            
-            chosen_gen = self.generators[action.item()]
-            
-            # Find optimal path (considering both loss and risk)
-            path = self.find_optimal_path(load, chosen_gen)
-            paths.append((load, chosen_gen, path))
-            
-            # Calculate actual loss (for reward)
-            loss = demand * self.compute_path_loss(path)
-            total_loss += loss
-        
-        # Store optimized paths for API access
-        self.optimized_paths = [
-            {
-                "load_node": load,
-                "load_name": self.G.nodes[load]["name"],
-                "generator_node": gen,
-                "generator_name": self.G.nodes[gen]["name"],
-                "path": path,
-                "demand": self.G.nodes[load]["demand"],
-                "loss": self.G.nodes[load]["demand"] * self.compute_path_loss(path)
-            }
-            for load, gen, path in paths
-        ]
-        
-        # Calculate reward (negative loss percentage)
-        loss_percent = (total_loss / total_demand) * 100 if total_demand > 0 else 0
-        reward = -loss_percent
-        
-        # REINFORCE update
-        policy_loss = []
-        for log_prob in log_probs:
-            policy_loss.append(-log_prob * reward)
-        
-        self.optimizer.zero_grad()
-        loss_tensor = torch.stack(policy_loss).sum()
-        loss_tensor.backward()
-        self.optimizer.step()
-        
-        # Store history
-        self.loss_history.append(loss_percent)
-        self.risk_history.append(np.mean([self.G[u][v]['risk'] for u,v in self.G.edges]))
-        
-        return {
-            'loss_percent': loss_percent,
-            'reward': reward,
-            'paths': self.optimized_paths,
-            'avg_risk': self.risk_history[-1],
-            'total_demand': total_demand
-        }
-    
-    def visualize_episode(self, episode_result):
-        """Visualize the current grid state and chosen paths"""
-        
-        plt.figure(figsize=(12, 8))
-        pos = nx.spring_layout(self.G, seed=42, k=2)
-        
-        # Draw nodes
-        node_colors = ['green' if n in self.generators else 'red' for n in self.G.nodes]
-        nx.draw_networkx_nodes(self.G, pos, node_color=node_colors, node_size=1000)
-        
-        # Draw all edges (gray)
-        nx.draw_networkx_edges(self.G, pos, edge_color='gray', width=1, alpha=0.5)
-        
-        # Highlight chosen paths
-        for load, gen, path in episode_result['paths']:
-            path_edges = list(zip(path, path[1:]))
-            nx.draw_networkx_edges(
-                self.G, pos, 
-                edgelist=path_edges,
-                edge_color='orange',
-                width=3,
-                alpha=0.8
-            )
-        
-        # Node labels
-        labels = {}
-        for n in self.G.nodes:
-            if n in self.generators:
-                labels[n] = f"G{n}"
-            else:
-                labels[n] = f"L{n}\n{self.G.nodes[n]['demand']}MW"
-        
-        nx.draw_networkx_labels(self.G, pos, labels, font_size=10)
-        
-        # Edge labels (show risk)
-        edge_labels = {}
-        for u, v in self.G.edges:
-            edge_labels[(u, v)] = f"R:{self.G[u][v]['risk']:.2f}"
-        
-        nx.draw_networkx_edge_labels(self.G, pos, edge_labels, font_size=8)
-        
-        plt.title(f"Smart Grid - Loss: {episode_result['loss_percent']:.2f}% | Avg Risk: {episode_result['avg_risk']:.3f}")
-        plt.tight_layout()
-        plt.show()
-    
-    def plot_training_progress(self):
-        """Plot loss and risk over time"""
-        fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(12, 4))
-        
-        ax1.plot(self.loss_history)
-        ax1.set_title('Transmission Loss % Over Time')
-        ax1.set_xlabel('Episode')
-        ax1.set_ylabel('Loss %')
-        ax1.grid(True)
-        
-        ax2.plot(self.risk_history)
-        ax2.set_title('Average Asset Risk Over Time')
-        ax2.set_xlabel('Episode')
-        ax2.set_ylabel('Risk')
-        ax2.grid(True)
-        
-        plt.tight_layout()
-        plt.show()
-
 
 class PolicyNetwork(nn.Module):
     """Deep Neural Network for policy"""
@@ -364,19 +34,325 @@ class PolicyNetwork(nn.Module):
 
 
 # ===============================
-# 2️⃣ TRAINING LOOP
+# SMART GRID OPTIMIZER WITH ML PREDICTIVE MAINTENANCE
+# ===============================
+
+class SmartGridOptimizer:
+    def __init__(self, num_nodes=8, num_generators=2):
+        """Initialize Smart Grid Optimizer with ML-based predictive maintenance"""
+        self.num_nodes = num_nodes
+        self.num_generators = num_generators
+        
+        # Initialize network graph
+        self.G = nx.Graph()
+        self.G.add_nodes_from(range(num_nodes))
+        
+        # Create connected graph with realistic topology
+        for i in range(num_nodes):
+            for j in range(i+1, num_nodes):
+                if np.random.random() > 0.4:
+                    self.G.add_edge(i, j, resistance=np.random.uniform(0.001, 0.005))
+        
+        # Ensure connectivity
+        if not nx.is_connected(self.G):
+            components = list(nx.connected_components(self.G))
+            for i in range(len(components)-1):
+                u = list(components[i])[0]
+                v = list(components[i+1])[0]
+                self.G.add_edge(u, v, resistance=np.random.uniform(0.001, 0.005))
+        
+        # Initialize node features with maintenance-relevant data
+        for node in self.G.nodes():
+            self.G.nodes[node]['demand'] = np.random.uniform(30, 80)
+            self.G.nodes[node]['voltage'] = np.random.uniform(210, 230)
+        
+        # Initialize edge features for predictive maintenance
+        for u, v in self.G.edges():
+            self.G[u][v]['resistance'] = np.random.uniform(0.001, 0.005)
+            self.G[u][v]['temperature'] = np.random.uniform(25, 65)
+            self.G[u][v]['current'] = np.random.uniform(100, 400)
+            self.G[u][v]['vibration'] = np.random.uniform(0.1, 0.5)
+            self.G[u][v]['age'] = np.random.uniform(1, 20)  # Years
+            self.G[u][v]['corrosion'] = np.random.uniform(0.0, 0.4)  # Percentage
+            self.G[u][v]['harmonic'] = np.random.uniform(1, 5)  # THD
+            self.G[u][v]['risk'] = 0.5
+        
+        # Initialize tracking
+        self.loss_history = []
+        self.reward_history = []
+        self.risk_history = []
+        
+        # Policy network for RL
+        self.policy = PolicyNetwork(num_nodes, num_nodes)
+        self.optimizer_rl = optim.Adam(self.policy.parameters(), lr=0.001)
+        
+        # Initialize Predictive Maintenance Model
+        try:
+            self.maintenance_model = PredictiveMaintenanceModel()
+            # Try to load pre-trained model
+            if not self.maintenance_model.load_models():
+                print("⚠️ No pre-trained model found. Training synthetic model...")
+                self._train_maintenance_model_synthetic()
+        except Exception as e:
+            print(f"❌ Error initializing maintenance model: {e}")
+            self.maintenance_model = None
+    
+    def setup_named_nodes(self):
+        """Setup named generators and substations"""
+        generators = {
+            0: "North Power Plant",
+            1: "South Thermal Station"
+        }
+        
+        substations = {
+            2: "Downtown Substation",
+            3: "Uptown Substation",
+            4: "Industrial Zone",
+            5: "Residential Hub",
+            6: "Shopping Complex",
+            7: "University Campus"
+        }
+        
+        for node, name in {**generators, **substations}.items():
+            if node < self.num_nodes:
+                self.G.nodes[node]['name'] = name
+    
+    def _train_maintenance_model_synthetic(self):
+        """Create synthetic training data for demo purposes"""
+        if self.maintenance_model is None:
+            return
+        
+        # Generate synthetic data and train
+        print("📊 Generating synthetic training data...")
+        data = self.maintenance_model.generate_synthetic_training_data(n_samples=10000)
+        self.maintenance_model.train(data)
+        self.maintenance_model.save_models()
+        
+        print(f"✅ Synthetic maintenance model trained and saved")
+    
+    def calculate_risk_from_features(self, u, v):
+        """Calculate risk using real ML predictive maintenance model"""
+        try:
+            if self.maintenance_model is None:
+                # Fallback: basic risk calculation
+                return self.G[u][v].get('risk', 0.5)
+            
+            # Get real features from monitoring
+            features = {
+                'temperature': self.G[u][v].get('temperature', 50),
+                'load': np.mean([
+                    self.G.nodes[u].get('demand', 50),
+                    self.G.nodes[v].get('demand', 50)
+                ]),
+                'vibration': self.G[u][v].get('vibration', 0.2),
+                'age': self.G[u][v].get('age', 10),
+                'corrosion': self.G[u][v].get('corrosion', 0.1),
+                'harmonics': self.G[u][v].get('harmonic', 2.0),
+                'oil_quality': 0.8,
+                'trip_count': 15,
+                'ambient_temp': 25,
+                'humidity': 50
+            }
+            
+            # Use ML model for prediction
+            risk_assessment = self.maintenance_model.predict_risk(features)
+            
+            # Store detailed risk info
+            self.G[u][v]['risk_details'] = risk_assessment
+            
+            # Return failure probability
+            if risk_assessment['failure_probability'] is not None:
+                return float(risk_assessment['failure_probability'])
+            else:
+                return self.G[u][v].get('risk', 0.5)
+        
+        except Exception as e:
+            print(f"⚠️ Error in risk calculation: {e}")
+            return self.G[u][v].get('risk', 0.5)
+    
+    def compute_path_loss(self, path):
+        """Compute transmission loss for a path"""
+        total_loss = 0
+        for i in range(len(path) - 1):
+            u, v = path[i], path[i+1]
+            if self.G.has_edge(u, v):
+                resistance = self.G[u][v].get('resistance', 0.003)
+                # Estimate power flow
+                power_flow = 50  # MW (approximate)
+                # Loss = power^2 * resistance (simplified I^2 * R)
+                loss = (power_flow ** 2) * resistance / 1000
+                total_loss += loss
+        return total_loss
+    
+    def find_optimal_path(self, source, target, risk_weight=10.0):
+        """Find path minimizing combined cost (resistance + risk)"""
+        try:
+            # Calculate weights with combined cost function
+            for u, v in self.G.edges():
+                resistance = self.G[u][v].get('resistance', 0.003)
+                risk = self.calculate_risk_from_features(u, v)
+                # Combined cost: resistance + weighted risk
+                cost = resistance + (risk_weight * risk)
+                self.G[u][v]['weight'] = cost
+            
+            # Find shortest path using combined cost
+            path = nx.shortest_path(
+                self.G, 
+                source=source, 
+                target=target, 
+                weight='weight'
+            )
+            
+            loss = self.compute_path_loss(path)
+            return {'path': path, 'loss': loss}
+        
+        except nx.NetworkXNoPath:
+            return {'path': [], 'loss': 0}
+        except Exception as e:
+            print(f"⚠️ Error finding path: {e}")
+            return {'path': [], 'loss': 0}
+    
+    def train_episode(self):
+        """Run single optimization episode"""
+        try:
+            # Update features (simulate time passing)
+            for u, v in self.G.edges():
+                self.G[u][v]['temperature'] += np.random.uniform(-2, 2)
+                self.G[u][v]['temperature'] = np.clip(self.G[u][v]['temperature'], 10, 100)
+                self.G[u][v]['age'] += 0.0001  # Slight aging
+            
+            # Find optimal paths for substations to generators
+            optimized_paths = []
+            total_loss = 0
+            total_demand = 0
+            total_risk = 0
+            
+            for substation in range(self.num_generators, self.num_nodes):
+                for generator in range(self.num_generators):
+                    # Find optimal path
+                    path_info = self.find_optimal_path(substation, generator)
+                    
+                    if path_info['path']:
+                        demand = self.G.nodes[substation].get('demand', 50)
+                        loss = path_info['loss']
+                        
+                        optimized_paths.append({
+                            'load_node': substation,
+                            'load_name': self.G.nodes[substation].get('name', f'Node {substation}'),
+                            'generator_node': generator,
+                            'generator_name': self.G.nodes[generator].get('name', f'Generator {generator}'),
+                            'path': path_info['path'],
+                            'demand': demand,
+                            'loss': loss
+                        })
+                        
+                        total_loss += loss
+                        total_demand += demand
+                        
+                        # Calculate average risk for path
+                        path_risks = []
+                        for i in range(len(path_info['path']) - 1):
+                            u, v = path_info['path'][i], path_info['path'][i+1]
+                            risk = self.calculate_risk_from_features(u, v)
+                            path_risks.append(risk)
+                        
+                        if path_risks:
+                            total_risk += np.mean(path_risks)
+            
+            # Calculate loss percentage
+            loss_percent = (total_loss / max(total_demand, 1)) * 100 if total_demand > 0 else 0
+            
+            # Calculate reward
+            reward = -loss_percent - (total_risk / max(len(optimized_paths), 1))
+            
+            # Track history
+            self.loss_history.append(loss_percent)
+            self.reward_history.append(reward)
+            self.risk_history.append(total_risk / max(len(optimized_paths), 1) if optimized_paths else 0)
+            
+            return {
+                'paths': optimized_paths,
+                'loss_percent': loss_percent,
+                'total_demand': total_demand,
+                'avg_risk': total_risk / max(len(optimized_paths), 1) if optimized_paths else 0,
+                'reward': reward
+            }
+        
+        except Exception as e:
+            print(f"❌ Error in training episode: {e}")
+            import traceback
+            traceback.print_exc()
+            return {
+                'paths': [],
+                'loss_percent': 0,
+                'total_demand': 0,
+                'avg_risk': 0,
+                'reward': 0
+            }
+    
+    def plot_training_progress(self):
+        """Plot training metrics"""
+        if not self.loss_history:
+            return
+        
+        fig, axes = plt.subplots(1, 3, figsize=(15, 4))
+        
+        axes[0].plot(self.loss_history)
+        axes[0].set_xlabel('Episode')
+        axes[0].set_ylabel('Loss %')
+        axes[0].set_title('Transmission Loss Over Time')
+        axes[0].grid(True)
+        
+        axes[1].plot(self.reward_history)
+        axes[1].set_xlabel('Episode')
+        axes[1].set_ylabel('Reward')
+        axes[1].set_title('Reward Over Time')
+        axes[1].grid(True)
+        
+        axes[2].plot(self.risk_history)
+        axes[2].set_xlabel('Episode')
+        axes[2].set_ylabel('Avg Risk')
+        axes[2].set_title('Risk Assessment Over Time')
+        axes[2].grid(True)
+        
+        plt.tight_layout()
+        plt.savefig('training_progress.png')
+        print("✅ Training progress saved to training_progress.png")
+    
+    def visualize_episode(self, result):
+        """Visualize current grid state"""
+        try:
+            pos = nx.spring_layout(self.G)
+            
+            plt.figure(figsize=(10, 8))
+            nx.draw_networkx_nodes(self.G, pos, node_color='lightblue', node_size=500)
+            nx.draw_networkx_edges(self.G, pos, alpha=0.5)
+            nx.draw_networkx_labels(self.G, pos)
+            
+            plt.title(f"Smart Grid - Loss: {result['loss_percent']:.2f}%")
+            plt.axis('off')
+            plt.tight_layout()
+            plt.savefig('grid_visualization.png')
+            plt.close()
+        except Exception as e:
+            print(f"⚠️ Error in visualization: {e}")
+
+
+# ===============================
+# TRAINING EXAMPLES
 # ===============================
 
 if __name__ == "__main__":
     
     # Create optimizer
     optimizer = SmartGridOptimizer(num_nodes=8, num_generators=2)
+    optimizer.setup_named_nodes()
     
     # Training
     num_episodes = 50
     
     print("🚀 Starting Smart Grid Training...")
-    print("=" * 50)
+    print("=" * 60)
     
     for episode in range(num_episodes):
         result = optimizer.train_episode()
@@ -386,9 +362,6 @@ if __name__ == "__main__":
             print(f"   Loss: {result['loss_percent']:.2f}%")
             print(f"   Avg Risk: {result['avg_risk']:.3f}")
             print(f"   Reward: {result['reward']:.2f}")
-            
-            # Visualize every 10 episodes
-            optimizer.visualize_episode(result)
     
     print("\n✅ Training Complete!")
     print(f"Final Loss: {optimizer.loss_history[-1]:.2f}%")
