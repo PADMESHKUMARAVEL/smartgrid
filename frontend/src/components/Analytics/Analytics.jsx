@@ -176,9 +176,9 @@ const Analytics = () => {
               <h2 className="text-lg font-bold mb-4 text-gray-900">Voltage Distribution</h2>
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={[
-                  { name: 'Min', value: statistics.voltage?.min?.toFixed(1) || 0 },
-                  { name: 'Avg', value: statistics.voltage?.mean?.toFixed(1) || 0 },
-                  { name: 'Max', value: statistics.voltage?.max?.toFixed(1) || 0 },
+                  { name: 'Min', value: parseFloat(statistics.voltage?.min?.toFixed(1) || 0) },
+                  { name: 'Avg', value: parseFloat(statistics.voltage?.mean?.toFixed(1) || 0) },
+                  { name: 'Max', value: parseFloat(statistics.voltage?.max?.toFixed(1) || 0) },
                 ]}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                   <XAxis stroke="#6b7280" />
@@ -198,14 +198,14 @@ const Analytics = () => {
                 <PieChart>
                   <Pie
                     data={[
-                      { name: 'Min', value: statistics.demand?.min?.toFixed(1) || 0 },
-                      { name: 'Avg', value: statistics.demand?.mean?.toFixed(1) || 0 },
-                      { name: 'Max', value: statistics.demand?.max?.toFixed(1) || 0 },
+                      { name: 'Min', value: parseFloat(statistics.demand?.min?.toFixed(1) || 0) },
+                      { name: 'Avg', value: parseFloat(statistics.demand?.mean?.toFixed(1) || 0) },
+                      { name: 'Max', value: parseFloat(statistics.demand?.max?.toFixed(1) || 0) },
                     ]}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
-                    label={({ name, value }) => `${name}: ${value}`}
+                    label={({ name, value }) => `${name}: ${value.toFixed(1)}`}
                     outerRadius={80}
                     fill="#8884d8"
                     dataKey="value"
@@ -258,9 +258,9 @@ const Analytics = () => {
                 <h2 className="text-lg font-bold mb-4 text-gray-900">Current Statistics</h2>
                 <ResponsiveContainer width="100%" height={300}>
                   <BarChart data={[
-                    { name: 'Min', current: statistics.current?.min?.toFixed(0) || 0 },
-                    { name: 'Avg', current: statistics.current?.mean?.toFixed(0) || 0 },
-                    { name: 'Max', current: statistics.current?.max?.toFixed(0) || 0 },
+                    { name: 'Min', current: parseFloat(statistics.current?.min?.toFixed(0) || 0) },
+                    { name: 'Avg', current: parseFloat(statistics.current?.mean?.toFixed(0) || 0) },
+                    { name: 'Max', current: parseFloat(statistics.current?.max?.toFixed(0) || 0) },
                   ]}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                     <XAxis dataKey="name" stroke="#6b7280" />

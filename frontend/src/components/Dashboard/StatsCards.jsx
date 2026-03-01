@@ -18,7 +18,7 @@ const StatsCards = ({ gridStatus, optimizationResult }) => {
   const stats = [
     {
       title: 'Current Load',
-      value: gridStatus ? `${gridStatus.totalLoad.toFixed(1)} MW` : '—',
+      value: gridStatus?.totalLoad ? `${gridStatus.totalLoad.toFixed(1)} MW` : '—',
       change: '🔄 Live',
       status: 'normal',
       icon: Zap,
@@ -26,7 +26,7 @@ const StatsCards = ({ gridStatus, optimizationResult }) => {
     },
     {
       title: 'Transmission Loss',
-      value: optimizationResult ? `${optimizationResult.loss_percent.toFixed(3)}%` : (gridStatus ? `${gridStatus.transmissionLossPercentage.toFixed(3)}%` : '—'),
+      value: optimizationResult?.loss_percent ? `${optimizationResult.loss_percent.toFixed(3)}%` : (gridStatus?.transmissionLossPercentage ? `${gridStatus.transmissionLossPercentage.toFixed(3)}%` : '—'),
       change: optimizationResult ? '✓ Optimized' : '—',
       status: optimizationResult ? 'optimized' : 'normal',
       icon: TrendingDown,
@@ -42,7 +42,7 @@ const StatsCards = ({ gridStatus, optimizationResult }) => {
     },
     {
       title: 'Network Risk',
-      value: optimizationResult ? optimizationResult.avg_risk.toFixed(3) : (gridStatus ? gridStatus.riskScore.toFixed(3) : '—'),
+      value: optimizationResult?.avg_risk ? optimizationResult.avg_risk.toFixed(3) : (gridStatus?.riskScore ? gridStatus.riskScore.toFixed(3) : '—'),
       change: optimizationResult ? '🎯 Managed' : '—',
       status: optimizationResult ? 'controlled' : 'normal',
       icon: AlertCircle,

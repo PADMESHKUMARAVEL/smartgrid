@@ -250,9 +250,9 @@ Current Iteration: ${gridState?.iteration}
             <h2 className="text-xl font-bold mb-4">Demand Distribution</h2>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={[
-                { name: 'Min Demand', value: statistics.demand?.min?.toFixed(1) || 0 },
-                { name: 'Avg Demand', value: statistics.demand?.mean?.toFixed(1) || 0 },
-                { name: 'Max Demand', value: statistics.demand?.max?.toFixed(1) || 0 },
+                { name: 'Min Demand', value: parseFloat(statistics.demand?.min?.toFixed(1) || 0) },
+                { name: 'Avg Demand', value: parseFloat(statistics.demand?.mean?.toFixed(1) || 0) },
+                { name: 'Max Demand', value: parseFloat(statistics.demand?.max?.toFixed(1) || 0) },
               ]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#444" />
                 <XAxis dataKey="name" stroke="#888" />
@@ -374,9 +374,9 @@ Current Iteration: ${gridState?.iteration}
             <h2 className="text-xl font-bold mb-4">Loss Comparison</h2>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={[
-                { name: 'Best', loss: lossMetrics.best_loss?.toFixed(3) || 0 },
-                { name: 'Worst', loss: lossMetrics.worst_loss?.toFixed(3) || 0 },
-                { name: 'Current', loss: lossMetrics.current_loss_percent?.toFixed(3) || 0 },
+                { name: 'Best', loss: parseFloat(lossMetrics.best_loss?.toFixed(3) || 0) },
+                { name: 'Worst', loss: parseFloat(lossMetrics.worst_loss?.toFixed(3) || 0) },
+                { name: 'Current', loss: parseFloat(lossMetrics.current_loss_percent?.toFixed(3) || 0) },
               ]}>
                 <CartesianGrid strokeDasharray="3 3" stroke="#444" />
                 <XAxis dataKey="name" stroke="#888" />

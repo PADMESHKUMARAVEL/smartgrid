@@ -12,7 +12,7 @@ class BackendApiService {
    */
   constructor() {
     this.baseUrl = API_BASE_URL;
-    this.timeout = 10000; // 10 second timeout
+    this.timeout = 30000; // 30 second timeout (increased from 10s)
   }
 
   /**
